@@ -8,7 +8,7 @@ class ChatbotConfigController {
    */
   getConfig = async (req, res, next) => {
     try {
-      const { chatbotId, workspaceId } = req.params;
+      const { id: chatbotId, workspaceId } = req.params;
 
       if (!workspaceId || !chatbotId) {
         return res.status(400).json({
@@ -34,7 +34,7 @@ class ChatbotConfigController {
    */
   saveConfig = async (req, res, next) => {
     try {
-      const { chatbotId, workspaceId } = req.params;
+      const { id: chatbotId, workspaceId } = req.params;
       const { company, instructions } = req.body;
 
       if (!workspaceId || !chatbotId) {
@@ -72,7 +72,7 @@ class ChatbotConfigController {
    */
   getSystemPrompt = async (req, res, next) => {
     try {
-      const { chatbotId, workspaceId } = req.params;
+      const { id: chatbotId, workspaceId } = req.params;
 
       if (!workspaceId || !chatbotId) {
         return res.status(400).json({
