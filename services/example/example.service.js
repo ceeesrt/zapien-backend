@@ -3,7 +3,6 @@ import AppConfig from '../../models/AppConfig.js';
 
 export default class ExampleService {
     constructor() {
-        connectMongoDB();
     }
 
     getStatus = async () => {

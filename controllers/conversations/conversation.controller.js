@@ -1,77 +1,121 @@
-import ConversationService from '../../services/conversations/conversation.service.js';
+import Conversation from '../../models/Conversation.js';
+import Message from '../../models/Message.js';
 
-const conversationService = new ConversationService();
+class ConversationController {
+  list = async (req, res) => {
+    try {
+      const { id: chatbotId } = req.params;
+      const { search, status, outcome, page = 1, limit = 10 } = req.query;
 
-export default class ConversationController {
-    list = async (req, res) => {
-        try {
-            const { id: chatbotId } = req.params;
-            const { status, startDate, endDate, search } = req.query;
-            const filters = { status, startDate, endDate, search };
-            const response = await conversationService.listConversations(chatbotId, filters);
-            return res.status(response.success ? 200 : 400).json(response);
-        } catch (error) {
-            console.error('❌ ConversationController.list:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error al listar conversaciones'
-            });
-        }
-    };
+      // Build filter
+      const filter = {};
 
-    get = async (req, res) => {
-        try {
-            const { conversationId } = req.params;
-            const response = await conversationService.getConversation(conversationId);
-            return res.status(response.success ? 200 : 404).json(response);
-        } catch (error) {
-            console.error('❌ ConversationController.get:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error al obtener conversación'
-            });
-        }
-    };
+      // If chatbotId provided (from chatbot detail), filter by chatbotId
+      if (chatbotId) {
+        filter.chatbotId = chatbotId;
+      }
 
-    getMessages = async (req, res) => {
-        try {
-            const { conversationId } = req.params;
-            const response = await conversationService.getMessages(conversationId);
-            return res.status(response.success ? 200 : 404).json(response);
-        } catch (error) {
-            console.error('❌ ConversationController.getMessages:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error al obtener mensajes'
-            });
-        }
-    };
+      // Apply other filters
+      if (status) {
+        filter.status = status;
+      }
 
-    close = async (req, res) => {
-        try {
-            const { conversationId } = req.params;
-            const response = await conversationService.closeConversation(conversationId);
-            return res.status(response.success ? 200 : 400).json(response);
-        } catch (error) {
-            console.error('❌ ConversationController.close:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error al cerrar conversación'
-            });
-        }
-    };
+      if (outcome) {
+        filter.outcome = outcome;
+      }
 
-    markSpam = async (req, res) => {
-        try {
-            const { conversationId } = req.params;
-            const response = await conversationService.markAsSpam(conversationId);
-            return res.status(response.success ? 200 : 400).json(response);
-        } catch (error) {
-            console.error('❌ ConversationController.markSpam:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error al marcar como spam'
-            });
-        }
-    };
+      if (search) {
+        filter.$or = [
+          { 'visitorMetadata.name': { $regex: search, $options: 'i' } },
+          { 'visitorMetadata.email': { $regex: search, $options: 'i' } },
+          { visitorId: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      // Get total count
+      const total = await Conversation.countDocuments(filter);
+
+      // Pagination
+      const skip = (page - 1) * limit;
+      const conversations = await Conversation.find(filter)
+        .sort({ lastMessageAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+
+      res.json({
+        success: true,
+        data: conversations,
+        total: total,
+        page: parseInt(page),
+        limit: parseInt(limit)
+      });
+    } catch (error) {
+      console.error('Error listing conversations:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
+
+  get = async (req, res) => {
+    try {
+      const { conversationId } = req.params;
+      const conversation = await Conversation.findById(conversationId);
+      if (!conversation) {
+        return res.status(404).json({ success: false, message: 'Conversation not found' });
+      }
+      res.json({ success: true, data: conversation });
+    } catch (error) {
+      console.error('Error getting conversation:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
+
+  getMessages = async (req, res) => {
+    try {
+      const { conversationId } = req.params;
+      const messages = await Message.find({ conversationId }).sort({ createdAt: 1 });
+
+      res.json({ success: true, data: messages });
+    } catch (error) {
+      console.error('Error getting messages:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
+
+  close = async (req, res) => {
+    try {
+      const { conversationId } = req.params;
+      const conversation = await Conversation.findByIdAndUpdate(
+        conversationId,
+        { status: 'closed' },
+        { new: true }
+      );
+      if (!conversation) {
+        return res.status(404).json({ success: false, message: 'Conversation not found' });
+      }
+      res.json({ success: true, data: conversation });
+    } catch (error) {
+      console.error('Error closing conversation:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
+
+  markSpam = async (req, res) => {
+    try {
+      const { conversationId } = req.params;
+      const conversation = await Conversation.findByIdAndUpdate(
+        conversationId,
+        { isSpam: true },
+        { new: true }
+      );
+      if (!conversation) {
+        return res.status(404).json({ success: false, message: 'Conversation not found' });
+      }
+      res.json({ success: true, data: conversation });
+    } catch (error) {
+      console.error('Error marking spam:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
 }
+
+export default ConversationController;

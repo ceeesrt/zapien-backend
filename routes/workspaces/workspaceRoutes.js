@@ -1,8 +1,10 @@
 import express from 'express';
 import WorkspaceController from '../../controllers/workspaces/workspace.controller.js';
+import ChatbotRoutes from '../chatbots/chatbotRoutes.js';
 import LeadRoutes from '../leads/leadRoutes.js';
 import AppointmentRoutes from '../appointments/appointmentRoutes.js';
 import QuoteRoutes from '../quotes/quoteRoutes.js';
+import IntegrationRoutes from '../integrations/integrationRoutes.js';
 
 const router = express.Router();
 const workspaceController = new WorkspaceController();
@@ -21,8 +23,10 @@ router.patch('/:id/members/:userId', workspaceController.updateMemberRole);
 router.delete('/:id/members/:userId', workspaceController.removeMember);
 
 // Nested routes
+router.use('/:workspaceId/chatbots', ChatbotRoutes);
 router.use('/:workspaceId/leads', LeadRoutes);
 router.use('/:workspaceId/appointments', AppointmentRoutes);
 router.use('/:workspaceId/quotes', QuoteRoutes);
+router.use('/:workspaceId/integrations', IntegrationRoutes);
 
 export default router;

@@ -1,4 +1,5 @@
 import AuthService from '../../services/auth/auth.service.js';
+import { validateEmail, validatePassword, validateRequired } from '../../middlewares/validation.middleware.js';
 
 const authService = new AuthService();
 
@@ -6,6 +7,29 @@ export default class AuthController {
     signup = async (req, res) => {
         try {
             const { email, password, name } = req.body;
+
+            const missing = validateRequired(['email', 'password', 'name'], { email, password, name });
+            if (missing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Campos requeridos: ${missing.join(', ')}`
+                });
+            }
+
+            if (!validateEmail(email)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Email inválido'
+                });
+            }
+
+            if (!validatePassword(password)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Password debe tener mínimo 6 caracteres'
+                });
+            }
+
             const response = await authService.signup(email, password, name);
             return res.status(response.success ? 201 : 400).json(response);
         } catch (error) {
@@ -20,7 +44,25 @@ export default class AuthController {
     login = async (req, res) => {
         try {
             const { email, password } = req.body;
+
+            const missing = validateRequired(['email', 'password'], { email, password });
+            if (missing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Campos requeridos: ${missing.join(', ')}`
+                });
+            }
+
+            if (!validateEmail(email)) {
+                console.log('❌ Invalid email format:', email);
+                return res.status(400).json({
+                    success: false,
+                    message: 'Email inválido'
+                });
+            }
+
             const response = await authService.login(email, password);
+            console.log('Auth response:', response);
             return res.status(response.success ? 200 : 401).json(response);
         } catch (error) {
             console.error('❌ AuthController.login:', error);
@@ -105,6 +147,22 @@ export default class AuthController {
     resetPassword = async (req, res) => {
         try {
             const { token, newPassword } = req.body;
+
+            const missing = validateRequired(['token', 'newPassword'], { token, newPassword });
+            if (missing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Campos requeridos: ${missing.join(', ')}`
+                });
+            }
+
+            if (!validatePassword(newPassword)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Password debe tener mínimo 6 caracteres'
+                });
+            }
+
             const response = await authService.resetPassword(token, newPassword);
             return res.status(response.success ? 200 : 400).json(response);
         } catch (error) {
@@ -149,6 +207,22 @@ export default class AuthController {
         try {
             const { userId } = req.user;
             const { currentPassword, newPassword } = req.body;
+
+            const missing = validateRequired(['currentPassword', 'newPassword'], { currentPassword, newPassword });
+            if (missing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Campos requeridos: ${missing.join(', ')}`
+                });
+            }
+
+            if (!validatePassword(newPassword)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Password debe tener mínimo 6 caracteres'
+                });
+            }
+
             const response = await authService.changePassword(userId, currentPassword, newPassword);
             return res.status(response.success ? 200 : 400).json(response);
         } catch (error) {

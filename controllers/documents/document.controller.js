@@ -19,29 +19,44 @@ export default class DocumentController {
 
     upload = async (req, res) => {
         try {
-            const { id: chatbotId } = req.params;
+            const { id: chatbotId, workspaceId } = req.params;
+
+            console.log('🔵 DocumentController.upload called');
+            console.log('   params:', { chatbotId, workspaceId });
+            console.log('   req.files exists:', !!req.files);
+            console.log('   req.files.file exists:', !!req.files?.file);
+
             if (!req.files || !req.files.file) {
+                console.log('❌ No file in request');
                 return res.status(400).json({
                     success: false,
                     message: 'No file provided'
                 });
             }
-            const response = await documentService.uploadDocument(chatbotId, req.files.file);
+
+            console.log('✅ File received:', {
+                name: req.files.file.name,
+                size: req.files.file.size,
+                mimetype: req.files.file.mimetype
+            });
+
+            const response = await documentService.uploadDocument(chatbotId, workspaceId, req.files.file);
+            console.log('✅ Service response:', response.success);
             return res.status(response.success ? 201 : 400).json(response);
         } catch (error) {
-            console.error('❌ DocumentController.upload:', error);
+            console.error('❌ DocumentController.upload error:', error.message);
             return res.status(500).json({
                 success: false,
-                message: 'Error al subir documento'
+                message: 'Error al subir documento: ' + error.message
             });
         }
     };
 
     createText = async (req, res) => {
         try {
-            const { id: chatbotId } = req.params;
+            const { id: chatbotId, workspaceId } = req.params;
             const { text } = req.body;
-            const response = await documentService.createTextDocument(chatbotId, text);
+            const response = await documentService.createTextDocument(chatbotId, workspaceId, text);
             return res.status(response.success ? 201 : 400).json(response);
         } catch (error) {
             console.error('❌ DocumentController.createText:', error);

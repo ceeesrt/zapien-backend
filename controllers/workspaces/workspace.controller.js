@@ -1,4 +1,5 @@
 import WorkspaceService from '../../services/workspaces/workspace.service.js';
+import { validateRequired, validateMongoId, validateEmail } from '../../middlewares/validation.middleware.js';
 
 const workspaceService = new WorkspaceService();
 
@@ -21,6 +22,15 @@ export default class WorkspaceController {
         try {
             const { userId } = req.user;
             const { name, industry, country } = req.body;
+
+            const missing = validateRequired(['name'], { name });
+            if (missing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Campos requeridos: ${missing.join(', ')}`
+                });
+            }
+
             const response = await workspaceService.createWorkspace(userId, name, industry, country);
             return res.status(response.success ? 201 : 400).json(response);
         } catch (error) {
@@ -97,6 +107,37 @@ export default class WorkspaceController {
             const { userId } = req.user;
             const { id } = req.params;
             const { email, role } = req.body;
+
+            if (!validateMongoId(id)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ID de workspace inválido'
+                });
+            }
+
+            const missing = validateRequired(['email', 'role'], { email, role });
+            if (missing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Campos requeridos: ${missing.join(', ')}`
+                });
+            }
+
+            if (!validateEmail(email)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Email inválido'
+                });
+            }
+
+            const validRoles = ['owner', 'admin', 'member'];
+            if (!validRoles.includes(role)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Rol inválido. Debe ser uno de: ${validRoles.join(', ')}`
+                });
+            }
+
             const response = await workspaceService.inviteMember(id, userId, email, role);
             return res.status(response.success ? 201 : 400).json(response);
         } catch (error) {

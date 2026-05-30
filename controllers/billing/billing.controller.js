@@ -1,4 +1,5 @@
 import BillingService from '../../services/billing/billing.service.js';
+import { validateRequired, validateMongoId } from '../../middlewares/validation.middleware.js';
 
 const billingService = new BillingService();
 
@@ -19,6 +20,14 @@ export default class BillingController {
     getSubscription = async (req, res) => {
         try {
             const { workspaceId } = req.params;
+
+            if (!validateMongoId(workspaceId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ID de workspace inválido'
+                });
+            }
+
             const response = await billingService.getSubscription(workspaceId);
             return res.status(response.success ? 200 : 404).json(response);
         } catch (error) {
@@ -34,6 +43,22 @@ export default class BillingController {
         try {
             const { workspaceId } = req.params;
             const { planId } = req.body;
+
+            if (!validateMongoId(workspaceId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ID de workspace inválido'
+                });
+            }
+
+            const missing = validateRequired(['planId'], { planId });
+            if (missing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Campos requeridos: ${missing.join(', ')}`
+                });
+            }
+
             const response = await billingService.subscribe(workspaceId, planId);
             return res.status(response.success ? 200 : 400).json(response);
         } catch (error) {
@@ -49,6 +74,22 @@ export default class BillingController {
         try {
             const { workspaceId } = req.params;
             const { planId } = req.body;
+
+            if (!validateMongoId(workspaceId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ID de workspace inválido'
+                });
+            }
+
+            const missing = validateRequired(['planId'], { planId });
+            if (missing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Campos requeridos: ${missing.join(', ')}`
+                });
+            }
+
             const response = await billingService.changePlan(workspaceId, planId);
             return res.status(response.success ? 200 : 400).json(response);
         } catch (error) {

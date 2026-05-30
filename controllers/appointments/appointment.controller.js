@@ -1,79 +1,121 @@
-import AppointmentService from '../../services/appointments/appointment.service.js';
-
-const appointmentService = new AppointmentService();
+import Appointment from '../../models/Appointment.js';
 
 export default class AppointmentController {
-    list = async (req, res) => {
-        try {
-            const { workspaceId } = req.params;
-            const { status, startDate, endDate, view } = req.query;
-            const filters = { status, startDate, endDate, view };
-            const response = await appointmentService.list(workspaceId, filters);
-            return res.status(response.success ? 200 : 400).json(response);
-        } catch (error) {
-            console.error('❌ AppointmentController.list:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error al listar citas'
-            });
-        }
-    };
+  list = async (req, res) => {
+    try {
+      const { wsId, cbId } = req.params;
+      const appointments = await Appointment.find({
+        workspaceId: wsId,
+        chatbotId: cbId,
+      }).sort({ scheduledAt: -1 });
+      res.json({ success: true, data: appointments });
+    } catch (error) {
+      console.error('Error getting appointments:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
 
-    get = async (req, res) => {
-        try {
-            const { id } = req.params;
-            const response = await appointmentService.get(id);
-            return res.status(response.success ? 200 : 404).json(response);
-        } catch (error) {
-            console.error('❌ AppointmentController.get:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error al obtener cita'
-            });
-        }
-    };
+  patch = async (req, res) => {
+    try {
+      const { wsId, cbId, id } = req.params;
+      const { status } = req.body;
+      const appointment = await Appointment.findOneAndUpdate(
+        { _id: id, workspaceId: wsId, chatbotId: cbId },
+        { status },
+        { new: true }
+      );
+      if (!appointment) {
+        return res.status(404).json({ success: false, message: 'Cita no encontrada' });
+      }
+      res.json({ success: true, data: appointment });
+    } catch (error) {
+      console.error('Error updating appointment:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
 
-    updateStatus = async (req, res) => {
-        try {
-            const { id } = req.params;
-            const { status } = req.body;
-            const response = await appointmentService.updateStatus(id, status);
-            return res.status(response.success ? 200 : 400).json(response);
-        } catch (error) {
-            console.error('❌ AppointmentController.updateStatus:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error al actualizar estado'
-            });
-        }
-    };
+  delete = async (req, res) => {
+    try {
+      const { wsId, cbId, id } = req.params;
+      const appointment = await Appointment.findOneAndDelete({
+        _id: id,
+        workspaceId: wsId,
+        chatbotId: cbId,
+      });
+      if (!appointment) {
+        return res.status(404).json({ success: false, message: 'Cita no encontrada' });
+      }
+      res.json({ success: true, message: 'Cita eliminada' });
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
 
-    reschedule = async (req, res) => {
-        try {
-            const { id } = req.params;
-            const { scheduledAt } = req.body;
-            const response = await appointmentService.reschedule(id, scheduledAt);
-            return res.status(response.success ? 200 : 400).json(response);
-        } catch (error) {
-            console.error('❌ AppointmentController.reschedule:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error al reagendar'
-            });
-        }
-    };
+  get = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const appointment = await Appointment.findById(id);
+      if (!appointment) {
+        return res.status(404).json({ success: false, message: 'Cita no encontrada' });
+      }
+      res.json({ success: true, data: appointment });
+    } catch (error) {
+      console.error('Error getting appointment:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
 
-    sendReminder = async (req, res) => {
-        try {
-            const { id } = req.params;
-            const response = await appointmentService.sendReminder(id);
-            return res.status(response.success ? 200 : 400).json(response);
-        } catch (error) {
-            console.error('❌ AppointmentController.sendReminder:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error al enviar recordatorio'
-            });
-        }
-    };
+  updateStatus = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      const appointment = await Appointment.findByIdAndUpdate(
+        id,
+        { status },
+        { new: true }
+      );
+      if (!appointment) {
+        return res.status(404).json({ success: false, message: 'Cita no encontrada' });
+      }
+      res.json({ success: true, data: appointment });
+    } catch (error) {
+      console.error('Error updating appointment status:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
+
+  reschedule = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { scheduledAt } = req.body;
+      const appointment = await Appointment.findByIdAndUpdate(
+        id,
+        { scheduledAt },
+        { new: true }
+      );
+      if (!appointment) {
+        return res.status(404).json({ success: false, message: 'Cita no encontrada' });
+      }
+      res.json({ success: true, data: appointment, message: 'Cita reprogramada' });
+    } catch (error) {
+      console.error('Error rescheduling appointment:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
+
+  sendReminder = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const appointment = await Appointment.findById(id);
+      if (!appointment) {
+        return res.status(404).json({ success: false, message: 'Cita no encontrada' });
+      }
+      // TODO: Send reminder email/SMS
+      res.json({ success: true, message: 'Recordatorio enviado' });
+    } catch (error) {
+      console.error('Error sending reminder:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
 }

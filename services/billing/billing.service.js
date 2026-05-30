@@ -1,14 +1,40 @@
-import connectMongoDB from '../../libs/mongoose.js';
+import { Subscription, Payment, Workspace } from '../../models/index.js';
+
+const PLANS = [
+    {
+        id: 'starter',
+        name: 'Starter',
+        price: 9900,
+        currency: 'ARS',
+        features: ['1 chatbot', '10,000 mensajes/mes', 'Soporte por email'],
+        billingPeriod: 'monthly'
+    },
+    {
+        id: 'professional',
+        name: 'Professional',
+        price: 29900,
+        currency: 'ARS',
+        features: ['5 chatbots', '100,000 mensajes/mes', 'Integraciones', 'Soporte prioritario'],
+        billingPeriod: 'monthly'
+    },
+    {
+        id: 'enterprise',
+        name: 'Enterprise',
+        price: 99900,
+        currency: 'ARS',
+        features: ['Chatbots ilimitados', 'Mensajes ilimitados', 'Todas las integraciones', 'Soporte 24/7'],
+        billingPeriod: 'monthly'
+    }
+];
 
 export default class BillingService {
-    constructor() {
-        connectMongoDB();
-    }
-
     listPlans = async () => {
         try {
-            // TODO: Return available plans from config
-            return { success: true, message: 'Planes obtenidos', data: { plans: [] } };
+            return {
+                success: true,
+                message: 'Planes obtenidos',
+                data: { plans: PLANS }
+            };
         } catch (error) {
             console.error('❌ BillingService.listPlans:', error);
             return { success: false, message: error.message };
@@ -17,8 +43,21 @@ export default class BillingService {
 
     getSubscription = async (workspaceId) => {
         try {
-            // TODO: Find subscription for workspace
-            return { success: true, message: 'Suscripción obtenida', data: { subscription: {} } };
+            const subscription = await Subscription.findOne({ workspaceId });
+
+            if (!subscription) {
+                return {
+                    success: true,
+                    message: 'No hay suscripción activa',
+                    data: { subscription: null }
+                };
+            }
+
+            return {
+                success: true,
+                message: 'Suscripción obtenida',
+                data: { subscription }
+            };
         } catch (error) {
             console.error('❌ BillingService.getSubscription:', error);
             return { success: false, message: error.message };
@@ -27,12 +66,31 @@ export default class BillingService {
 
     subscribe = async (workspaceId, planId) => {
         try {
-            // TODO: Create Mercado Pago preference
-            // TODO: Return checkout URL
+            const plan = PLANS.find(p => p.id === planId);
+            if (!plan) {
+                return { success: false, message: 'Plan no encontrado' };
+            }
+
+            // Mock Mercado Pago preference creation
+            const preferenceId = `pref_${Date.now()}`;
+            const checkoutUrl = `https://www.mercadopago.com.ar/checkout/v1/redirect?preference-id=${preferenceId}`;
+
+            // Create subscription record
+            const subscription = new Subscription({
+                workspaceId,
+                planId,
+                status: 'pending_payment',
+                currentPeriodStart: new Date(),
+                currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                mercadoPagoPreferenceId: preferenceId
+            });
+
+            await subscription.save();
+
             return {
                 success: true,
                 message: 'Checkout generado',
-                data: { checkoutUrl: '' }
+                data: { checkoutUrl, preferenceId }
             };
         } catch (error) {
             console.error('❌ BillingService.subscribe:', error);
@@ -42,8 +100,31 @@ export default class BillingService {
 
     changePlan = async (workspaceId, newPlanId) => {
         try {
-            // TODO: Update subscription plan
-            return { success: true, message: 'Plan actualizado' };
+            const plan = PLANS.find(p => p.id === newPlanId);
+            if (!plan) {
+                return { success: false, message: 'Plan no encontrado' };
+            }
+
+            const subscription = await Subscription.findOneAndUpdate(
+                { workspaceId },
+                {
+                    planId: newPlanId,
+                    status: 'active',
+                    currentPeriodStart: new Date(),
+                    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                },
+                { new: true }
+            );
+
+            if (!subscription) {
+                return { success: false, message: 'Suscripción no encontrada' };
+            }
+
+            return {
+                success: true,
+                message: 'Plan actualizado correctamente',
+                data: { subscription }
+            };
         } catch (error) {
             console.error('❌ BillingService.changePlan:', error);
             return { success: false, message: error.message };
@@ -52,9 +133,23 @@ export default class BillingService {
 
     cancel = async (workspaceId) => {
         try {
-            // TODO: Cancel subscription in Mercado Pago
-            // TODO: Update subscription status
-            return { success: true, message: 'Suscripción cancelada' };
+            const subscription = await Subscription.findOneAndUpdate(
+                { workspaceId },
+                {
+                    status: 'cancelled',
+                    cancelledAt: new Date()
+                },
+                { new: true }
+            );
+
+            if (!subscription) {
+                return { success: false, message: 'Suscripción no encontrada' };
+            }
+
+            return {
+                success: true,
+                message: 'Suscripción cancelada correctamente'
+            };
         } catch (error) {
             console.error('❌ BillingService.cancel:', error);
             return { success: false, message: error.message };
@@ -63,20 +158,61 @@ export default class BillingService {
 
     listPayments = async (workspaceId) => {
         try {
-            // TODO: Find all payments for workspace
-            return { success: true, message: 'Pagos obtenidos', data: { payments: [] } };
+            const payments = await Payment.find({ workspaceId }).sort({ createdAt: -1 });
+
+            return {
+                success: true,
+                message: 'Pagos obtenidos',
+                data: { payments }
+            };
         } catch (error) {
             console.error('❌ BillingService.listPayments:', error);
             return { success: false, message: error.message };
         }
     };
 
-    getInvoice = async (invoiceId) => {
+    getInvoice = async (paymentId) => {
         try {
-            // TODO: Get invoice from Mercado Pago or generate from payment
-            return { success: true, message: 'Factura obtenida', data: { invoiceUrl: '' } };
+            const payment = await Payment.findById(paymentId);
+
+            if (!payment) {
+                return { success: false, message: 'Pago no encontrado' };
+            }
+
+            const invoiceUrl = `${process.env.API_URL}/api/invoices/${paymentId}/pdf`;
+
+            return {
+                success: true,
+                message: 'Factura obtenida',
+                data: { invoiceUrl, payment }
+            };
         } catch (error) {
             console.error('❌ BillingService.getInvoice:', error);
+            return { success: false, message: error.message };
+        }
+    };
+
+    recordPayment = async (workspaceId, mercadoPagoData) => {
+        try {
+            const payment = new Payment({
+                workspaceId,
+                mercadoPagoId: mercadoPagoData.id,
+                amount: mercadoPagoData.transaction_amount,
+                currency: mercadoPagoData.currency_id,
+                status: mercadoPagoData.status,
+                paymentMethod: mercadoPagoData.payment_method_id,
+                externalReference: mercadoPagoData.external_reference
+            });
+
+            await payment.save();
+
+            return {
+                success: true,
+                message: 'Pago registrado',
+                data: { payment }
+            };
+        } catch (error) {
+            console.error('❌ BillingService.recordPayment:', error);
             return { success: false, message: error.message };
         }
     };

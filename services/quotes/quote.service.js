@@ -1,14 +1,14 @@
-import connectMongoDB from '../../libs/mongoose.js';
+import { Quote } from '../../models/index.js';
+import crypto from 'crypto';
 
 export default class QuoteService {
-    constructor() {
-        connectMongoDB();
-    }
-
     list = async (workspaceId, filters = {}) => {
         try {
-            // TODO: Find quotes with filters and sorting
-            return { success: true, message: 'Cotizaciones obtenidas', data: { quotes: [] } };
+            let query = { workspaceId };
+            if (filters.status) query.status = filters.status;
+
+            const quotes = await Quote.find(query).sort({ createdAt: -1 });
+            return { success: true, message: 'Cotizaciones obtenidas', data: quotes };
         } catch (error) {
             console.error('❌ QuoteService.list:', error);
             return { success: false, message: error.message };
@@ -17,8 +17,9 @@ export default class QuoteService {
 
     get = async (quoteId) => {
         try {
-            // TODO: Find quote with items
-            return { success: true, message: 'Cotización obtenida', data: { quote: {} } };
+            const quote = await Quote.findById(quoteId);
+            if (!quote) return { success: false, message: 'Cotización no encontrada' };
+            return { success: true, message: 'Cotización obtenida', data: quote };
         } catch (error) {
             console.error('❌ QuoteService.get:', error);
             return { success: false, message: error.message };
@@ -27,10 +28,20 @@ export default class QuoteService {
 
     update = async (quoteId, updates) => {
         try {
-            // TODO: Update quote items and status
-            return { success: true, message: 'Cotización actualizada', data: { quote: {} } };
+            const quote = await Quote.findByIdAndUpdate(quoteId, updates, { new: true });
+            return { success: true, message: 'Cotización actualizada', data: quote };
         } catch (error) {
             console.error('❌ QuoteService.update:', error);
+            return { success: false, message: error.message };
+        }
+    };
+
+    delete = async (quoteId) => {
+        try {
+            await Quote.deleteOne({ _id: quoteId });
+            return { success: true, message: 'Cotización eliminada' };
+        } catch (error) {
+            console.error('❌ QuoteService.delete:', error);
             return { success: false, message: error.message };
         }
     };

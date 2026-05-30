@@ -1,14 +1,15 @@
-import connectMongoDB from '../../libs/mongoose.js';
+import { Lead } from '../../models/index.js';
 
 export default class LeadService {
-    constructor() {
-        connectMongoDB();
-    }
 
     list = async (workspaceId, filters = {}) => {
         try {
-            // TODO: Find leads with filters, sorting
-            return { success: true, message: 'Leads obtenidos', data: { leads: [] } };
+            let query = { workspaceId };
+            if (filters.status) query.status = filters.status;
+            if (filters.search) query.email = { $regex: filters.search, $options: 'i' };
+
+            const leads = await Lead.find(query).sort({ createdAt: -1 });
+            return { success: true, message: 'Leads obtenidos', data: leads };
         } catch (error) {
             console.error('❌ LeadService.list:', error);
             return { success: false, message: error.message };
@@ -17,8 +18,9 @@ export default class LeadService {
 
     get = async (leadId) => {
         try {
-            // TODO: Find lead with conversation and messages
-            return { success: true, message: 'Lead obtenido', data: { lead: {} } };
+            const lead = await Lead.findById(leadId);
+            if (!lead) return { success: false, message: 'Lead no encontrado' };
+            return { success: true, message: 'Lead obtenido', data: lead };
         } catch (error) {
             console.error('❌ LeadService.get:', error);
             return { success: false, message: error.message };
@@ -27,8 +29,8 @@ export default class LeadService {
 
     update = async (leadId, updates) => {
         try {
-            // TODO: Update lead (status, notes)
-            return { success: true, message: 'Lead actualizado', data: { lead: {} } };
+            const lead = await Lead.findByIdAndUpdate(leadId, updates, { new: true });
+            return { success: true, message: 'Lead actualizado', data: lead };
         } catch (error) {
             console.error('❌ LeadService.update:', error);
             return { success: false, message: error.message };
@@ -37,7 +39,7 @@ export default class LeadService {
 
     delete = async (leadId) => {
         try {
-            // TODO: Delete lead
+            await Lead.deleteOne({ _id: leadId });
             return { success: true, message: 'Lead eliminado' };
         } catch (error) {
             console.error('❌ LeadService.delete:', error);

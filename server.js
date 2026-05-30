@@ -1,22 +1,38 @@
-import express from 'express';
 import dotenv from 'dotenv';
+dotenv.config();
+
+import express from 'express';
 import cors from 'cors';
 import fileUpload from 'express-fileupload';
 import path from 'path';
+import connectMongoDB from './libs/mongoose.js';
+import { authMiddleware } from './middlewares/auth.middleware.js';
+import { processSyncQueue, schedulePeriodicSync } from './services/queue/sync-processor.js';
 
 // Routes
 import AuthRoutes from './routes/auth/authRoutes.js';
 import WorkspaceRoutes from './routes/workspaces/workspaceRoutes.js';
 import ChatbotRoutes from './routes/chatbots/chatbotRoutes.js';
+import ConversationRoutes from './routes/conversations/conversationRoutes.js';
+import DocumentRoutes from './routes/documents/documentRoutes.js';
 import LeadRoutes from './routes/leads/leadRoutes.js';
 import AppointmentRoutes from './routes/appointments/appointmentRoutes.js';
 import QuoteRoutes from './routes/quotes/quoteRoutes.js';
-import IntegrationRoutes from './routes/integrations/integrationRoutes.js';
 import BillingRoutes from './routes/billing/billingRoutes.js';
 import EmbedRoutes from './routes/embed/embedRoutes.js';
 import WebhookRoutes from './routes/webhooks/webhookRoutes.js';
+import SocialRoutes from './routes/messaging/socialRoutes.js';
+import CalendarRoutes from './routes/calendar/calendarRoutes.js';
 
-dotenv.config();
+connectMongoDB();
+
+// Initialize integration sync queue
+processSyncQueue();
+console.log('✅ Integration sync queue initialized');
+
+// Schedule periodic sync check every 5 minutes
+setInterval(schedulePeriodicSync, 5 * 60 * 1000);
+console.log('✅ Periodic sync scheduler started (every 5 minutes)');
 
 const app = express();
 
@@ -39,18 +55,26 @@ app.use(fileUpload({
 
 app.use(express.json());
 
-app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-// API Routes
+// Public routes (sin autenticación)
 app.use('/api/auth', AuthRoutes);
-app.use('/api/workspaces', WorkspaceRoutes);
-app.use('/api/chatbots', ChatbotRoutes);
-app.use('/api/integrations', IntegrationRoutes);
-app.use('/api/billing', BillingRoutes);
-
-// Public endpoints (embed + webhooks)
 app.use('/api/embed', EmbedRoutes);
 app.use('/api/webhooks', WebhookRoutes);
+app.use('/api/messaging', SocialRoutes);
+app.use('/api/calendar', CalendarRoutes);
+
+// Protected routes (con autenticación)
+app.use('/api/workspaces', authMiddleware, WorkspaceRoutes);
+
+// Nested routes under workspaces
+// These are mounted in workspaceRoutes.js to keep the structure modular
+// e.g., /api/workspaces/:workspaceId/chatbots
+
+// Legacy direct routes (para compatibilidad)
+app.use('/api/conversations', authMiddleware, ConversationRoutes);
+app.use('/api/documents', authMiddleware, DocumentRoutes);
+app.use('/api/billing', authMiddleware, BillingRoutes);
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, '0.0.0.0', () => {

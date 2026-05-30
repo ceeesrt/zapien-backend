@@ -1,167 +1,316 @@
-import connectMongoDB from '../../libs/mongoose.js';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { User, RefreshToken, Workspace } from '../../models/index.js';
 
 export default class AuthService {
-    constructor() {
-        connectMongoDB();
+  signup = async (email, password, name) => {
+    try {
+      const existingUser = await User.findOne({ email: email.toLowerCase() });
+      if (existingUser) {
+        return { success: false, message: 'El email ya está registrado' };
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      const emailVerificationToken = crypto.randomBytes(32).toString('hex');
+
+      const user = new User({
+        email: email.toLowerCase(),
+        passwordHash,
+        name,
+        emailVerificationToken,
+        emailVerified: false
+      });
+
+      await user.save();
+
+      // Create default workspace for the user
+      const slug = `workspace-${user._id.toString().slice(-8)}`.toLowerCase();
+      const workspace = new Workspace({
+        ownerId: user._id,
+        name: `${name}'s Workspace`,
+        slug,
+        plan: 'free'
+      });
+
+      await workspace.save();
+
+      // Set the default workspace ID on the user
+      user.defaultWorkspaceId = workspace._id;
+      await user.save();
+
+      return {
+        success: true,
+        message: 'Usuario creado. Verifica tu email.',
+        data: { userId: user._id, email: user.email, defaultWorkspaceId: workspace._id }
+      };
+    } catch (error) {
+      console.error('❌ AuthService.signup:', error);
+      return { success: false, message: error.message };
     }
+  };
 
-    signup = async (email, password, name) => {
-        try {
-            // TODO: Hash password with bcrypt
-            // TODO: Create user document
-            // TODO: Generate verification token
-            // TODO: Send verification email
-            return {
-                success: true,
-                message: 'Usuario creado. Verifica tu email.',
-                data: { userId: 'xxx', email }
-            };
-        } catch (error) {
-            console.error('❌ AuthService.signup:', error);
-            return { success: false, message: error.message };
-        }
-    };
+  login = async (email, password) => {
+    try {
+      const user = await User.findOne({ email: email.toLowerCase() });
 
-    login = async (email, password) => {
-        try {
-            // TODO: Find user by email
-            // TODO: Compare password hash
-            // TODO: Generate access & refresh tokens
-            // TODO: Update lastLoginAt
-            return {
-                success: true,
-                message: 'Login exitoso',
-                data: { accessToken: 'xxx', refreshToken: 'yyy', user: {} }
-            };
-        } catch (error) {
-            console.error('❌ AuthService.login:', error);
-            return { success: false, message: error.message };
-        }
-    };
+      if (!user) {
+        return { success: false, message: 'Email o contraseña incorrectos' };
+      }
 
-    logout = async (userId, refreshToken) => {
-        try {
-            // TODO: Revoke refresh token
-            return { success: true, message: 'Logout exitoso' };
-        } catch (error) {
-            console.error('❌ AuthService.logout:', error);
-            return { success: false, message: error.message };
-        }
-    };
+      const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+      if (!passwordMatch) {
+        return { success: false, message: 'Email o contraseña incorrectos' };
+      }
 
-    refreshToken = async (refreshToken) => {
-        try {
-            // TODO: Verify refresh token
-            // TODO: Generate new access token
-            return {
-                success: true,
-                message: 'Token renovado',
-                data: { accessToken: 'xxx' }
-            };
-        } catch (error) {
-            console.error('❌ AuthService.refreshToken:', error);
-            return { success: false, message: error.message };
-        }
-    };
+      // Si el usuario no tiene workspace default, crear uno ahora
+      let defaultWorkspaceId = user.defaultWorkspaceId;
+      if (!defaultWorkspaceId) {
+        const { Workspace } = await import('../../models/index.js');
+        const slug = `workspace-${user._id.toString().slice(-8)}`.toLowerCase();
+        const workspace = new Workspace({
+          ownerId: user._id,
+          name: `${user.name}'s Workspace`,
+          slug,
+          plan: 'free'
+        });
+        await workspace.save();
+        defaultWorkspaceId = workspace._id;
+        user.defaultWorkspaceId = defaultWorkspaceId;
+        await user.save();
+      }
 
-    verifyEmail = async (token) => {
-        try {
-            // TODO: Find user by verification token
-            // TODO: Mark email as verified
-            return { success: true, message: 'Email verificado' };
-        } catch (error) {
-            console.error('❌ AuthService.verifyEmail:', error);
-            return { success: false, message: error.message };
-        }
-    };
+      const accessToken = jwt.sign(
+        { userId: user._id, email: user.email },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
 
-    resendVerification = async (email) => {
-        try {
-            // TODO: Find user by email
-            // TODO: Generate and send new verification token
-            return { success: true, message: 'Email de verificación reenviado' };
-        } catch (error) {
-            console.error('❌ AuthService.resendVerification:', error);
-            return { success: false, message: error.message };
-        }
-    };
+      const refreshToken = crypto.randomBytes(32).toString('hex');
+      await RefreshToken.create({
+        token: refreshToken,
+        userId: user._id,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      });
 
-    forgotPassword = async (email) => {
-        try {
-            // TODO: Find user by email
-            // TODO: Generate password reset token with expiry
-            // TODO: Send reset email
-            return { success: true, message: 'Email de reset enviado' };
-        } catch (error) {
-            console.error('❌ AuthService.forgotPassword:', error);
-            return { success: false, message: error.message };
-        }
-    };
+      await User.updateOne({ _id: user._id }, { lastLoginAt: new Date() });
 
-    resetPassword = async (token, newPassword) => {
-        try {
-            // TODO: Verify reset token and expiry
-            // TODO: Hash new password
-            // TODO: Update user password
-            // TODO: Invalidate all refresh tokens
-            return { success: true, message: 'Password actualizado' };
-        } catch (error) {
-            console.error('❌ AuthService.resetPassword:', error);
-            return { success: false, message: error.message };
+      return {
+        success: true,
+        message: 'Login exitoso',
+        data: {
+          accessToken,
+          refreshToken,
+          user: {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar,
+            defaultWorkspaceId
+          }
         }
-    };
+      };
+    } catch (error) {
+      console.error('❌ AuthService.login:', error);
+      return { success: false, message: error.message };
+    }
+  };
 
-    getProfile = async (userId) => {
-        try {
-            // TODO: Find user by ID
-            return {
-                success: true,
-                message: 'Perfil obtenido',
-                data: { user: {} }
-            };
-        } catch (error) {
-            console.error('❌ AuthService.getProfile:', error);
-            return { success: false, message: error.message };
-        }
-    };
+  logout = async (userId, refreshToken) => {
+    try {
+      await RefreshToken.updateOne(
+        { token: refreshToken },
+        { revokedAt: new Date() }
+      );
+      return { success: true, message: 'Logout exitoso' };
+    } catch (error) {
+      console.error('❌ AuthService.logout:', error);
+      return { success: false, message: error.message };
+    }
+  };
 
-    updateProfile = async (userId, updates) => {
-        try {
-            // TODO: Validate updates (name, avatar)
-            // TODO: Update user document
-            return {
-                success: true,
-                message: 'Perfil actualizado',
-                data: { user: {} }
-            };
-        } catch (error) {
-            console.error('❌ AuthService.updateProfile:', error);
-            return { success: false, message: error.message };
-        }
-    };
+  refreshToken = async (refreshToken) => {
+    try {
+      const token = await RefreshToken.findOne({ token: refreshToken });
 
-    changePassword = async (userId, currentPassword, newPassword) => {
-        try {
-            // TODO: Find user
-            // TODO: Verify current password
-            // TODO: Hash new password
-            // TODO: Update password
-            return { success: true, message: 'Password cambiado' };
-        } catch (error) {
-            console.error('❌ AuthService.changePassword:', error);
-            return { success: false, message: error.message };
-        }
-    };
+      if (!token || token.revokedAt || new Date() > token.expiresAt) {
+        return { success: false, message: 'Token inválido o expirado' };
+      }
 
-    deleteAccount = async (userId) => {
-        try {
-            // TODO: Delete user document
-            // TODO: Clean up related data (workspace, chatbots, etc.)
-            // TODO: Invalidate all tokens
-            return { success: true, message: 'Cuenta eliminada' };
-        } catch (error) {
-            console.error('❌ AuthService.deleteAccount:', error);
-            return { success: false, message: error.message };
-        }
-    };
+      const user = await User.findById(token.userId);
+      const newAccessToken = jwt.sign(
+        { userId: user._id, email: user.email },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      return {
+        success: true,
+        message: 'Token renovado',
+        data: { accessToken: newAccessToken }
+      };
+    } catch (error) {
+      console.error('❌ AuthService.refreshToken:', error);
+      return { success: false, message: error.message };
+    }
+  };
+
+  verifyEmail = async (token) => {
+    try {
+      const user = await User.findOne({ emailVerificationToken: token });
+
+      if (!user) {
+        return { success: false, message: 'Token inválido' };
+      }
+
+      await User.updateOne(
+        { _id: user._id },
+        { emailVerified: true, emailVerificationToken: null }
+      );
+
+      return { success: true, message: 'Email verificado' };
+    } catch (error) {
+      console.error('❌ AuthService.verifyEmail:', error);
+      return { success: false, message: error.message };
+    }
+  };
+
+  resendVerification = async (email) => {
+    try {
+      const user = await User.findOne({ email: email.toLowerCase() });
+
+      if (!user) {
+        return { success: false, message: 'Usuario no encontrado' };
+      }
+
+      if (user.emailVerified) {
+        return { success: false, message: 'Email ya verificado' };
+      }
+
+      const emailVerificationToken = crypto.randomBytes(32).toString('hex');
+      await User.updateOne({ _id: user._id }, { emailVerificationToken });
+
+      return { success: true, message: 'Email de verificación reenviado' };
+    } catch (error) {
+      console.error('❌ AuthService.resendVerification:', error);
+      return { success: false, message: error.message };
+    }
+  };
+
+  forgotPassword = async (email) => {
+    try {
+      const user = await User.findOne({ email: email.toLowerCase() });
+
+      if (!user) {
+        return { success: true, message: 'Si el email existe, recibirá instrucciones' };
+      }
+
+      const passwordResetToken = crypto.randomBytes(32).toString('hex');
+      const passwordResetExpiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000);
+
+      await User.updateOne(
+        { _id: user._id },
+        { passwordResetToken, passwordResetExpiresAt }
+      );
+
+      return { success: true, message: 'Email de reset enviado' };
+    } catch (error) {
+      console.error('❌ AuthService.forgotPassword:', error);
+      return { success: false, message: error.message };
+    }
+  };
+
+  resetPassword = async (token, newPassword) => {
+    try {
+      const user = await User.findOne({ passwordResetToken: token });
+
+      if (!user || new Date() > user.passwordResetExpiresAt) {
+        return { success: false, message: 'Token inválido o expirado' };
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+
+      await User.updateOne(
+        { _id: user._id },
+        { passwordHash, passwordResetToken: null, passwordResetExpiresAt: null }
+      );
+
+      return { success: true, message: 'Password actualizado' };
+    } catch (error) {
+      console.error('❌ AuthService.resetPassword:', error);
+      return { success: false, message: error.message };
+    }
+  };
+
+  getProfile = async (userId) => {
+    try {
+      const user = await User.findById(userId).select('-passwordHash');
+
+      if (!user) {
+        return { success: false, message: 'Usuario no encontrado' };
+      }
+
+      return {
+        success: true,
+        message: 'Perfil obtenido',
+        data: { user }
+      };
+    } catch (error) {
+      console.error('❌ AuthService.getProfile:', error);
+      return { success: false, message: error.message };
+    }
+  };
+
+  updateProfile = async (userId, updates) => {
+    try {
+      const allowedFields = ['name', 'avatar'];
+      const filteredUpdates = {};
+
+      allowedFields.forEach(field => {
+        if (updates[field]) filteredUpdates[field] = updates[field];
+      });
+
+      const user = await User.findByIdAndUpdate(userId, filteredUpdates, { new: true });
+
+      return {
+        success: true,
+        message: 'Perfil actualizado',
+        data: { user }
+      };
+    } catch (error) {
+      console.error('❌ AuthService.updateProfile:', error);
+      return { success: false, message: error.message };
+    }
+  };
+
+  changePassword = async (userId, currentPassword, newPassword) => {
+    try {
+      const user = await User.findById(userId);
+
+      const passwordMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!passwordMatch) {
+        return { success: false, message: 'Contraseña actual incorrecta' };
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      await User.updateOne({ _id: userId }, { passwordHash });
+
+      return { success: true, message: 'Password cambiado' };
+    } catch (error) {
+      console.error('❌ AuthService.changePassword:', error);
+      return { success: false, message: error.message };
+    }
+  };
+
+  deleteAccount = async (userId) => {
+    try {
+      await User.deleteOne({ _id: userId });
+      await RefreshToken.deleteMany({ userId });
+
+      return { success: true, message: 'Cuenta eliminada' };
+    } catch (error) {
+      console.error('❌ AuthService.deleteAccount:', error);
+      return { success: false, message: error.message };
+    }
+  };
 }
