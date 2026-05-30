@@ -8,13 +8,12 @@ class ChatbotConfigController {
    */
   getConfig = async (req, res, next) => {
     try {
-      const { chatbotId } = req.params;
-      const workspaceId = req.workspace?._id || req.workspaceId;
+      const { chatbotId, workspaceId } = req.params;
 
-      if (!workspaceId) {
-        return res.status(401).json({
+      if (!workspaceId || !chatbotId) {
+        return res.status(400).json({
           success: false,
-          message: 'Workspace no identificado'
+          message: 'Parámetros requeridos: workspaceId, chatbotId'
         });
       }
 
@@ -35,14 +34,13 @@ class ChatbotConfigController {
    */
   saveConfig = async (req, res, next) => {
     try {
-      const { chatbotId } = req.params;
-      const workspaceId = req.workspace?._id || req.workspaceId;
+      const { chatbotId, workspaceId } = req.params;
       const { company, instructions } = req.body;
 
-      if (!workspaceId) {
-        return res.status(401).json({
+      if (!workspaceId || !chatbotId) {
+        return res.status(400).json({
           success: false,
-          message: 'Workspace no identificado'
+          message: 'Parámetros requeridos: workspaceId, chatbotId'
         });
       }
 
@@ -74,13 +72,12 @@ class ChatbotConfigController {
    */
   getSystemPrompt = async (req, res, next) => {
     try {
-      const { chatbotId } = req.params;
-      const workspaceId = req.workspace?._id || req.workspaceId;
+      const { chatbotId, workspaceId } = req.params;
 
-      if (!workspaceId) {
-        return res.status(401).json({
+      if (!workspaceId || !chatbotId) {
+        return res.status(400).json({
           success: false,
-          message: 'Workspace no identificado'
+          message: 'Parámetros requeridos: workspaceId, chatbotId'
         });
       }
 
