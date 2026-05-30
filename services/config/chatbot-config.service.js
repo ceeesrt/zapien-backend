@@ -29,13 +29,23 @@ class ChatbotConfigService {
    */
   saveCompanyInfo = async (workspaceId, companyData) => {
     try {
+      // companyData contiene: { company: {...}, hours: [...], hoursDisplay: [...], dispatches: {...}, payments: {...}, social: {...} }
+      // Guardamos todo directamente
       const company = await CompanyInfo.findOneAndUpdate(
         { workspaceId },
-        { workspaceId, ...companyData },
+        {
+          workspaceId,
+          company: companyData.company || {},
+          hours: companyData.hours || [],
+          hoursDisplay: companyData.hoursDisplay || [],
+          dispatches: companyData.dispatches || {},
+          payments: companyData.payments || {},
+          social: companyData.social || {}
+        },
         { upsert: true, new: true }
       );
 
-      logger.info('✅ Company info saved:', { workspaceId });
+      logger.info('✅ Company info saved:', { workspaceId, name: company.company?.name });
       return { success: true, data: company };
     } catch (error) {
       logger.error('Error saving company info:', error);
