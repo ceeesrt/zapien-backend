@@ -11,7 +11,9 @@ const chatbotSchema = new mongoose.Schema({
     tone: String,
     customPrompt: String,
     welcomeMessage: String,
-    fallbackMessage: String
+    fallbackMessage: String,
+    emoji: { type: String, default: '🤖' },
+    color: { type: String, default: 'voltage' }
   },
 
   widget: {
@@ -36,6 +38,7 @@ const chatbotSchema = new mongoose.Schema({
       lastSyncAt: Date
     },
     calendar: {
+      enabled: { type: Boolean, default: false },
       provider: String,
       googleClientId: { type: String, set: function(value) { return value ? encrypt(value) : null; }, get: function(value) { return value ? decrypt(value) : null; } },
       googleClientSecret: { type: String, set: function(value) { return value ? encrypt(value) : null; }, get: function(value) { return value ? decrypt(value) : null; } },
@@ -44,11 +47,11 @@ const chatbotSchema = new mongoose.Schema({
       calendarId: String,
       connectedAt: Date,
       timezone: String,
-      businessHoursStart: String,
-      businessHoursEnd: String,
+      bookingHoursStart: String,
+      bookingHoursEnd: String,
       bufferMinutes: Number,
       maxDaysInAdvance: Number,
-      workingDays: [Number]
+      bookingDays: [Number]
     },
     whatsapp: {
       enabled: { type: Boolean, default: false },

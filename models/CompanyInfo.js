@@ -17,7 +17,7 @@ const companyInfoSchema = new mongoose.Schema(
       email: String,
       website: String
     },
-    hours: [
+    operationHours: [
       {
         day: String,
         open: String,
@@ -25,7 +25,7 @@ const companyInfoSchema = new mongoose.Schema(
         isClosed: Boolean
       }
     ],
-    hoursDisplay: [String],
+    operationHoursDisplay: [String],
     dispatches: {
       available: Boolean,
       specialCases: String
@@ -53,9 +53,37 @@ const companyInfoSchema = new mongoose.Schema(
       viber: String,
       line: String,
       messenger: String
+    },
+
+    additionalInfo: [
+      {
+        question: String,
+        answer: String
+      }
+    ],
+
+    embedding: [Number],
+    embeddingText: String,
+    embeddingModel: {
+      type: String,
+      default: 'text-embedding-3-small'
     }
   },
   { timestamps: true }
+);
+
+// Vector search index for semantic similarity
+companyInfoSchema.index(
+  { embedding: 'cosmosSearch' },
+  {
+    cosmosSearchOptions: {
+      kind: 'vector-ivf',
+      m: 4,
+      efConstruction: 400,
+      efSearch: 400,
+      metric: 'cosine'
+    }
+  }
 );
 
 export default mongoose.model('CompanyInfo', companyInfoSchema);
